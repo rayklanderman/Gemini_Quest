@@ -6,19 +6,11 @@
     <meta name="theme-color" content="#0f172a" />
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="manifest" href="manifest.json">
     <title>GeminiQuest</title>
+    <link rel="manifest" href="/manifest.json" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
     <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          // Explicitly set scope to relative path to handle preview sub-paths correctly
-          navigator.serviceWorker.register('./sw.js', { scope: './' })
-            .then(reg => console.log('SW registered: ', reg.scope))
-            .catch(err => console.error('SW registration failed: ', err));
-        });
-      }
       tailwind.config = {
         darkMode: 'class',
         theme: {
@@ -39,19 +31,6 @@
                 pink: '#ff0055',
                 green: '#00ff9d'
               },
-              scifi: {
-                50: '#f0fdfa',
-                100: '#ccfbf1',
-                200: '#99f6e4',
-                300: '#5eead4',
-                400: '#2dd4bf',
-                500: '#14b8a6',
-                600: '#0d9488',
-                700: '#0f766e',
-                800: '#115e59',
-                900: '#134e4a',
-                950: '#042f2e',
-              }
             },
             animation: {
               'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
@@ -96,21 +75,27 @@
       /* Modern Scrollbar */
       ::-webkit-scrollbar { width: 6px; height: 6px; }
       ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
-      ::-webkit-scrollbar-thumb:hover { background: #475569; }
+      ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; }
+      .dark ::-webkit-scrollbar-thumb { background: #334155; }
+      ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+      .dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
 
-      /* Glassmorphism Utilities */
+      /* Glassmorphism Utilities - Light Mode Default */
       .glass-panel {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(226, 232, 240, 0.8);
+        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
+      }
+      
+      /* Dark Mode Override */
+      .dark .glass-panel {
         background: rgba(15, 23, 42, 0.6);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
         border: 1px solid rgba(255, 255, 255, 0.08);
-        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-      }
-      
-      .dark .glass-panel {
-        background: rgba(5, 11, 20, 0.7);
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
       }
 
       /* Reading Ruler */
@@ -133,6 +118,12 @@
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
       }
+      /* Fallback for light mode text gradient if needed specific overriding */
+      .light .text-gradient {
+        background: linear-gradient(to right, #0061ff, #60efff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
     </style>
   <script type="importmap">
 {
@@ -146,6 +137,17 @@
   }
 }
 </script>
+<script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(registration => {
+          console.log('SW registered: ', registration);
+        }).catch(registrationError => {
+          console.log('SW registration failed: ', registrationError);
+        });
+      });
+    }
+  </script>
 </head>
   <body class="bg-gray-50 dark:bg-void-900 text-gray-900 dark:text-gray-100 transition-colors duration-500 overflow-hidden selection:bg-neon-cyan selection:text-black">
     <div id="root"></div>

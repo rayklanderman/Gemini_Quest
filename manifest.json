@@ -5,15 +5,15 @@
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
-  "orientation": "portrait-primary",
+  "description": "An immersive AI science tutor turning observations into gamified learning quests.",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/6134/6134346.png",
+      "src": "https://cdn-icons-png.flaticon.com/512/6122/6122003.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/6134/6134346.png",
+      "src": "https://cdn-icons-png.flaticon.com/512/6122/6122003.png",
       "sizes": "512x512",
       "type": "image/png"
     }

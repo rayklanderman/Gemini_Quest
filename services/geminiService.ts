@@ -16,6 +16,18 @@ export const selectApiKey = async (): Promise<void> => {
     }
 }
 
+// Helper to sanitize JSON strings (remove markdown code blocks)
+const cleanJson = (text: string): string => {
+  if (!text) return "{}";
+  let cleaned = text.trim();
+  if (cleaned.startsWith("```json")) {
+    cleaned = cleaned.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+  } else if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```\s*/, "").replace(/\s*```$/, "");
+  }
+  return cleaned;
+};
+
 // 1. Analyze Inputs (Text + Image + Audio) -> Structured JSON
 export const analyzeQuestInputs = async (
   text: string | undefined,
@@ -37,7 +49,7 @@ export const analyzeQuestInputs = async (
   }
   if (audioBase64) {
     parts.push({
-        inlineData: { mimeType: 'audio/mp3', data: audioBase64 } 
+        inlineData: { mimeType: 'audio/webm', data: audioBase64 } 
     });
   }
 
@@ -91,30 +103,27 @@ export const analyzeQuestInputs = async (
   };
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.5-flash',
     contents: {
         role: 'user',
-        parts: [
-            ...parts,
-            { text: "You are an expert science tutor. Analyze the provided inputs. Identify the scientific phenomenon. Generate a structured response. If a hypothesis is provided, critique it constructively." }
-        ]
+        parts: parts
     },
     config: {
+      systemInstruction: "You are an expert science tutor. Analyze the provided inputs (text, images, sketches, audio). If a sketch or diagram is provided (e.g. physics force diagram, biology cell structure), interpret the handwriting and drawings to solve the problem or explain the concept step-by-step. Identify the scientific phenomenon. Generate a structured response. If a hypothesis is provided, critique it constructively.",
       responseMimeType: "application/json",
-      responseSchema: responseSchema,
-      thinkingConfig: { thinkingBudget: 2048 } 
+      responseSchema: responseSchema
     }
   });
 
-  const jsonText = response.text || "{}";
+  const jsonText = cleanJson(response.text || "{}");
   try {
     const data = JSON.parse(jsonText) as QuestResult;
     data.id = crypto.randomUUID();
     data.timestamp = Date.now();
     return data;
   } catch (e) {
-    console.error("Failed to parse JSON", e);
-    throw new Error("Failed to process quest results.");
+    console.error("Failed to parse JSON", e, jsonText);
+    throw new Error("Failed to process quest results. Please try again.");
   }
 };
 
@@ -186,6 +195,7 @@ export const generateExplainerVideo = async (
     }
   });
 
+  // Polling loop
   while (!operation.done) {
     await new Promise(resolve => setTimeout(resolve, 5000)); 
     operation = await ai.operations.getVideosOperation({ operation });
@@ -194,7 +204,16 @@ export const generateExplainerVideo = async (
   const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
   if (!videoUri) throw new Error("Video generation failed");
 
-  return `${videoUri}&key=${process.env.API_KEY}`; 
+  // Fetch video bytes to create a blob URL for playback
+  // This avoids CORS issues with the raw URI in <video> tags
+  // Safely check if videoUri already has query params
+  const separator = videoUri.includes('?') ? '&' : '?';
+  const response = await fetch(`${videoUri}${separator}key=${process.env.API_KEY}`);
+  if (!response.ok) {
+      throw new Error("Failed to download generated video content");
+  }
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
 };
 
 // 5. Smart Monitor: Detect Emotion
@@ -225,7 +244,8 @@ export const detectUserEmotion = async (imageBase64: string): Promise<{ isConfus
   });
   
   try {
-      return JSON.parse(response.text || "{}");
+      const jsonText = cleanJson(response.text || "{}");
+      return JSON.parse(jsonText);
   } catch {
       return { isConfused: false, advice: "" };
   }
