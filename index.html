@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+    <title>GeminiQuest</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          // Explicitly set scope to relative path to handle preview sub-paths correctly
+          navigator.serviceWorker.register('./sw.js', { scope: './' })
+            .then(reg => console.log('SW registered: ', reg.scope))
+            .catch(err => console.error('SW registration failed: ', err));
+        });
+      }
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              dyslexic: ['OpenDyslexic', 'sans-serif'],
+            },
+            colors: {
+              void: {
+                900: '#050b14', // Deepest background
+                800: '#0f172a', // Card background
+                700: '#1e293b',
+              },
+              neon: {
+                cyan: '#00f2ff',
+                purple: '#bd00ff',
+                pink: '#ff0055',
+                green: '#00ff9d'
+              },
+              scifi: {
+                50: '#f0fdfa',
+                100: '#ccfbf1',
+                200: '#99f6e4',
+                300: '#5eead4',
+                400: '#2dd4bf',
+                500: '#14b8a6',
+                600: '#0d9488',
+                700: '#0f766e',
+                800: '#115e59',
+                900: '#134e4a',
+                950: '#042f2e',
+              }
+            },
+            animation: {
+              'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'float': 'float 6s ease-in-out infinite',
+              'fade-in': 'fadeIn 0.8s ease-out forwards',
+              'slide-up': 'slideUp 0.5s ease-out forwards',
+            },
+            keyframes: {
+              float: {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-10px)' },
+              },
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              slideUp: {
+                '0%': { transform: 'translateY(20px)', opacity: '0' },
+                '100%': { transform: 'translateY(0)', opacity: '1' },
+              }
+            },
+            backgroundImage: {
+              'glass-gradient': 'linear-gradient(145deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%)',
+              'neon-gradient': 'linear-gradient(to right, #00f2ff, #bd00ff)',
+            }
+          },
+        },
+      }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <style>
+      @font-face {
+        font-family: 'OpenDyslexic';
+        src: url('https://cdn.jsdelivr.net/npm/opendyslexic@2.1.0-beta1/fonts/OpenDyslexic-Regular.otf');
+      }
+      body { 
+        font-family: 'Inter', sans-serif; 
+        -webkit-tap-highlight-color: transparent;
+      }
+      .font-dyslexic body { font-family: 'OpenDyslexic', sans-serif !important; }
+      
+      /* Modern Scrollbar */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+      ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+      /* Glassmorphism Utilities */
+      .glass-panel {
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+      }
+      
+      .dark .glass-panel {
+        background: rgba(5, 11, 20, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      /* Reading Ruler */
+      .reading-ruler {
+        position: fixed;
+        left: 0;
+        right: 0;
+        height: 60px;
+        background: rgba(255, 230, 0, 0.15);
+        pointer-events: none;
+        z-index: 9999;
+        border-top: 2px solid rgba(255, 230, 0, 0.3);
+        border-bottom: 2px solid rgba(255, 230, 0, 0.3);
+        box-shadow: 0 0 100px rgba(0,0,0,0.5);
+      }
+
+      /* Text Gradients */
+      .text-gradient {
+        background: linear-gradient(to right, #00f2ff, #bd00ff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.1/",
+    "react": "https://esm.sh/react@^19.2.1",
+    "recharts": "https://esm.sh/recharts@^3.5.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.32.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.559.0"
+  }
+}
+</script>
+</head>
+  <body class="bg-gray-50 dark:bg-void-900 text-gray-900 dark:text-gray-100 transition-colors duration-500 overflow-hidden selection:bg-neon-cyan selection:text-black">
+    <div id="root"></div>
+  </body>
+</html>

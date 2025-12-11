@@ -1,0 +1,8 @@
+{
+  "name": "GeminiQuest",
+  "description": "An immersive AI science tutor turning observations into gamified learning quests.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
