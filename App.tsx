@@ -214,12 +214,14 @@ const GroundingSkeleton = () => (
     </div>
 );
 
-const VideoPlaceholder = () => (
-  <div className="w-full h-full bg-gray-100 dark:bg-void-900 flex flex-col items-center justify-center text-gray-400 dark:text-white/30 space-y-3 border border-gray-200 dark:border-white/5 rounded-2xl min-h-[200px]">
-    <div className="p-4 bg-white dark:bg-void-800 rounded-full border border-gray-200 dark:border-white/10 shadow-sm dark:shadow-[0_0_20px_rgba(0,0,0,0.5)]">
-        <Video className="w-8 h-8 text-neon-purple" />
+const VideoPlaceholder = ({ error }: { error?: boolean }) => (
+  <div className={`w-full h-full bg-gray-100 dark:bg-void-900 flex flex-col items-center justify-center space-y-3 border rounded-2xl min-h-[200px] ${error ? 'border-red-500/30 bg-red-500/5' : 'border-gray-200 dark:border-white/5'}`}>
+    <div className={`p-4 rounded-full border shadow-sm dark:shadow-[0_0_20px_rgba(0,0,0,0.5)] ${error ? 'bg-red-500/10 border-red-500/20' : 'bg-white dark:bg-void-800 border-gray-200 dark:border-white/10'}`}>
+        {error ? <AlertCircle className="w-8 h-8 text-red-500" /> : <Video className="w-8 h-8 text-neon-purple" />}
     </div>
-    <span className="text-sm font-medium">Simulation Ready</span>
+    <span className={`text-sm font-medium ${error ? 'text-red-500' : 'text-gray-400 dark:text-white/30'}`}>
+        {error ? 'Generation Failed' : 'Simulation Ready'}
+    </span>
   </div>
 );
 
@@ -348,6 +350,10 @@ const LiveTutorMode: React.FC<{ onClose: () => void, session?: QuestSession }> =
             - Has the user generated a video? ${session.generatedVideoUrl ? 'YES' : 'NO (They can generate one by scrolling down)'}.
             - Video Prompt (what the video shows/will show): "${session.videoConfig?.prompt || 'N/A'}"
             
+            USER INPUT CONTEXT:
+            The user started this quest with an image (sketch or upload). I have injected this image into your visual context at the start of this session.
+            If they ask "describe my sketch" or "what did I draw", refer to that initial image.
+            
             INSTRUCTIONS FOR TUTOR:
             1. You have access to the user's camera to see them.
             2. You also know the context above.
@@ -368,6 +374,16 @@ const LiveTutorMode: React.FC<{ onClose: () => void, session?: QuestSession }> =
               onopen: () => {
                  if (!isActive) return;
                  setStatus("Listening...");
+                 
+                 // INJECT CONTEXT IMAGE: Send the initial sketch/image to the Live API
+                 if (session?.inputs?.image) {
+                     sessionPromise.then(s => {
+                         console.log("Sending context image to Live API...");
+                         s.sendRealtimeInput({
+                             media: { mimeType: 'image/jpeg', data: session.inputs.image! }
+                         });
+                     });
+                 }
                  
                  // Audio Send
                  scriptProcessor.onaudioprocess = (e) => {
@@ -593,6 +609,8 @@ export default function App() {
   const [smartMonitorEnabled, setSmartMonitorEnabled] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [chatInput, setChatInput] = useState('');
+  // New state for Veo error handling
+  const [videoErrorMap, setVideoErrorMap] = useState<Record<string, boolean>>({});
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -884,12 +902,19 @@ export default function App() {
 
   const handleGenerateVideo = async (session: QuestSession) => {
       if(!session.videoConfig || !session.result) return;
+      // Clear previous error
+      setVideoErrorMap(prev => ({ ...prev, [session.id]: false }));
+      
       setSessions(prev => prev.map(s => s.id === session.id ? { ...s, isVideoLoading: true } : s));
       try {
           const img = session.videoConfig.useInputImage ? session.inputs.image : undefined;
           const url = await generateExplainerVideo(session.videoConfig.prompt, session.videoConfig.aspectRatio, img);
           setSessions(prev => prev.map(s => s.id === session.id ? { ...s, generatedVideoUrl: url, isVideoLoading: false } : s));
-      } catch (e) { setSessions(prev => prev.map(s => s.id === session.id ? { ...s, isVideoLoading: false } : s)); }
+      } catch (e) { 
+          console.error("Video generation failed:", e);
+          setVideoErrorMap(prev => ({ ...prev, [session.id]: true }));
+          setSessions(prev => prev.map(s => s.id === session.id ? { ...s, isVideoLoading: false } : s)); 
+      }
   };
 
   const handleChatSend = async () => {
@@ -1124,10 +1149,34 @@ export default function App() {
                                     <div className="flex-1 relative bg-black/50 overflow-hidden rounded-2xl">
                                         {currentSession.isVideoLoading ? <LoadingSpinner label="Simulating (Veo)..." /> : 
                                           currentSession.generatedVideoUrl ? (
-                                              <video src={currentSession.generatedVideoUrl} controls autoPlay loop className="w-full h-full object-contain" />
-                                          ) : <VideoPlaceholder />
+                                              <video 
+                                                key={currentSession.generatedVideoUrl} 
+                                                src={currentSession.generatedVideoUrl} 
+                                                controls 
+                                                autoPlay 
+                                                muted
+                                                playsInline
+                                                loop 
+                                                className="w-full h-full object-contain"
+                                                onError={(e) => {
+                                                    console.error("Video load error:", e);
+                                                    setVideoErrorMap(prev => ({ ...prev, [currentSession.id]: true }));
+                                                }}
+                                              />
+                                          ) : <VideoPlaceholder error={videoErrorMap[currentSession.id]} />
                                         }
-                                        <div className="absolute top-4 left-4 bg-black/60 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-bold text-white border border-white/20 flex items-center gap-1.5 pointer-events-none">
+                                        {/* Fallback Link Button */}
+                                        {currentSession.generatedVideoUrl && (
+                                            <a 
+                                                href={currentSession.generatedVideoUrl} 
+                                                target="_blank" 
+                                                rel="noreferrer"
+                                                className="absolute top-4 right-4 bg-black/60 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-bold text-white border border-white/20 flex items-center gap-1.5 hover:bg-black/80 transition-colors z-20"
+                                            >
+                                                <Download size={12} /> Direct Link
+                                            </a>
+                                        )}
+                                        <div className="absolute top-4 left-4 bg-black/60 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-bold text-white border border-white/20 flex items-center gap-1.5 pointer-events-none z-20">
                                             <Video size={12} className="text-neon-purple"/> Veo Studio
                                         </div>
                                     </div>

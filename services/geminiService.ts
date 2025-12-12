@@ -59,7 +59,7 @@ export const analyzeQuestInputs = async (
     properties: {
       title: { type: Type.STRING, description: "A catchy title for this science quest" },
       explanation: { type: Type.STRING, description: "A comprehensive, easy-to-understand explanation. If the user provided a hypothesis, analyze it here." },
-      videoPrompt: { type: Type.STRING, description: "A detailed visual description to generate a 5-second educational video about this concept using Veo." },
+      videoPrompt: { type: Type.STRING, description: "A detailed visual description to generate a 5-second educational video about this concept using Veo. Ensure it is safe, scientific, and visually clear." },
       reasoningSummary: { type: Type.STRING, description: "A summary of the step-by-step scientific reasoning used to reach this conclusion." },
       visualTitle: { type: Type.STRING, description: "Title for a data chart." },
       visualType: { type: Type.STRING, enum: ["bar", "pie", "line"] },
@@ -109,7 +109,7 @@ export const analyzeQuestInputs = async (
         parts: parts
     },
     config: {
-      systemInstruction: "You are an expert science tutor. Analyze the provided inputs (text, images, sketches, audio). If a sketch or diagram is provided (e.g. physics force diagram, biology cell structure), interpret the handwriting and drawings to solve the problem or explain the concept step-by-step. Identify the scientific phenomenon. Generate a structured response. If a hypothesis is provided, critique it constructively.",
+      systemInstruction: "You are an expert science tutor. Analyze the provided inputs (text, images, sketches, audio). If a sketch or diagram is provided (e.g. physics force diagram, biology cell structure), interpret the handwriting and drawings to solve the problem or explain the concept step-by-step. Identify the scientific phenomenon. Generate a structured response. If a hypothesis is provided, critique it constructively. Ensure the 'videoPrompt' is purely educational, scientific, safe for all audiences, and describes a clear visual scene.",
       responseMimeType: "application/json",
       responseSchema: responseSchema
     }
@@ -176,44 +176,64 @@ export const generateExplainerVideo = async (
     aspectRatio: '16:9' | '9:16' = '16:9',
     inputImageBase64?: string
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Capture key at call time
+  const currentKey = process.env.API_KEY; 
+  const ai = new GoogleGenAI({ apiKey: currentKey });
   
-  // Prepare payload
-  const imagePart = inputImageBase64 ? {
-      imageBytes: inputImageBase64,
-      mimeType: 'image/jpeg'
-  } : undefined;
-
-  let operation = await ai.models.generateVideos({
+  // Construct request dynamically to avoid undefined properties
+  const request: any = {
     model: 'veo-3.1-fast-generate-preview', 
-    prompt: `Cinematic, educational, 4k: ${prompt}`,
-    image: imagePart,
+    prompt: `${prompt}`,
     config: {
       numberOfVideos: 1,
       resolution: '720p',
       aspectRatio: aspectRatio
     }
-  });
+  };
 
-  // Polling loop
+  if (inputImageBase64) {
+      request.image = {
+          imageBytes: inputImageBase64,
+          mimeType: 'image/jpeg'
+      };
+  }
+
+  let operation = await ai.models.generateVideos(request);
+
+  // Polling loop with 10s delay (Veo recommended)
   while (!operation.done) {
-    await new Promise(resolve => setTimeout(resolve, 5000)); 
+    await new Promise(resolve => setTimeout(resolve, 10000)); 
     operation = await ai.operations.getVideosOperation({ operation });
   }
 
-  const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
-  if (!videoUri) throw new Error("Video generation failed");
+  // Extra safety delay to ensure CDN propagation
+  await new Promise(resolve => setTimeout(resolve, 2000));
 
-  // Fetch video bytes to create a blob URL for playback
-  // This avoids CORS issues with the raw URI in <video> tags
-  // Safely check if videoUri already has query params
+  const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
+  if (!videoUri) throw new Error("Video generation failed: No URI returned.");
+
+  // Fetch the video content using the API key and convert to a Blob URL
   const separator = videoUri.includes('?') ? '&' : '?';
-  const response = await fetch(`${videoUri}${separator}key=${process.env.API_KEY}`);
-  if (!response.ok) {
-      throw new Error("Failed to download generated video content");
+  const urlWithKey = `${videoUri}${separator}key=${currentKey}`;
+  
+  try {
+      console.log("Attempting to fetch video blob...");
+      const response = await fetch(urlWithKey);
+      if (!response.ok) {
+          throw new Error(`Fetch failed: ${response.status}`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      // Explicitly set MIME type to ensure browser playback compatibility
+      const blob = new Blob([arrayBuffer], { type: 'video/mp4' });
+      const blobUrl = URL.createObjectURL(blob);
+      console.log("Video blob created successfully");
+      return blobUrl;
+  } catch (e) {
+      console.warn("Video fetch failed (likely CORS), falling back to direct URL", e);
+      // Fallback: Return the direct URL. 
+      // This is a robust backup if CORS blocks the fetch in the browser.
+      return urlWithKey;
   }
-  const blob = await response.blob();
-  return URL.createObjectURL(blob);
 };
 
 // 5. Smart Monitor: Detect Emotion
