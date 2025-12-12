@@ -254,7 +254,7 @@ const GamificationBar: React.FC<{ profile: UserProfile }> = ({ profile }) => {
   );
 };
 
-const LiveTutorMode: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+const LiveTutorMode: React.FC<{ onClose: () => void, session?: QuestSession }> = ({ onClose, session }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [status, setStatus] = useState("Initializing...");
   const [volume, setVolume] = useState(0);
@@ -332,15 +332,37 @@ const LiveTutorMode: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         source.connect(scriptProcessor);
         scriptProcessor.connect(inputCtx.destination);
 
-        // 4. Connect to Gemini
+        // 4. Connect to Gemini with Context
         setStatus("Connecting...");
+        
+        let appStateContext = "The user is currently on the home screen and has not started a quest yet.";
+        if (session && session.result) {
+            appStateContext = `
+            CURRENT APP STATE CONTEXT:
+            The user is currently studying a quest titled: "${session.result.title}".
+            
+            AI EXPLANATION ALREADY PROVIDED TO USER:
+            "${session.result.explanation.substring(0, 800)}..."
+            
+            VEO VIDEO STATUS:
+            - Has the user generated a video? ${session.generatedVideoUrl ? 'YES' : 'NO (They can generate one by scrolling down)'}.
+            - Video Prompt (what the video shows/will show): "${session.videoConfig?.prompt || 'N/A'}"
+            
+            INSTRUCTIONS FOR TUTOR:
+            1. You have access to the user's camera to see them.
+            2. You also know the context above.
+            3. If the user asks "What did Veo generate?" or "Explain the video", describe the video scene using the 'Video Prompt' above.
+            4. If the user asks for an in-depth explanation of the subject, use the 'AI Explanation' above as a starting point but expand on it using your own broad scientific knowledge.
+            5. If the user seems confused, reassure them and break down the topic in the 'Title' simply.
+            `;
+        }
         
         const sessionPromise = ai.live.connect({
             model: 'gemini-2.5-flash-native-audio-preview-09-2025',
             config: { 
               responseModalities: [Modality.AUDIO], 
               speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' }}},
-              systemInstruction: "You are a patient, empathetic science tutor. Your goal is to explain concepts clearly. Listen carefully to the user's tone. If they sound confused, hesitant, or ask for clarification, immediately stop, apologize, and explain the concept again more simply and slowly. If they ask you to speak slower, adjust your rate. Be conversational, encouraging, and allow them to interrupt you. YOU CAN SEE THE USER via their camera. If they show you an object or drawing, describe it and help them with it. Always be brief."
+              systemInstruction: `You are a patient, empathetic science tutor. Your goal is to explain concepts clearly. Listen carefully to the user's tone. If they sound confused, hesitant, or ask for clarification, immediately stop, apologize, and explain the concept again more simply and slowly. If they ask you to speak slower, adjust your rate. Be conversational, encouraging, and allow them to interrupt you. YOU CAN SEE THE USER via their camera. If they show you an object or drawing, describe it and help them with it. Always be brief. ${appStateContext}`
             },
             callbacks: {
               onopen: () => {
@@ -459,7 +481,7 @@ const LiveTutorMode: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         if (sessionRef.current) sessionRef.current.then((s: any) => s.close());
         if (audioContextRef.current) audioContextRef.current.close();
     };
-  }, []);
+  }, [session]); // Re-run if session changes (though practically modal unmounts on close)
 
   return (
     <div className="fixed inset-0 z-50 bg-void-900 flex flex-col items-center justify-center">
@@ -481,6 +503,13 @@ const LiveTutorMode: React.FC<{ onClose: () => void }> = ({ onClose }) => {
            <div className="h-2 bg-void-800 rounded-full overflow-hidden w-full max-w-[200px] mx-auto mt-4 border border-white/10">
                <div className="h-full bg-red-500 transition-all duration-100 ease-out" style={{ width: `${Math.min(100, volume)}%` }}></div>
            </div>
+           
+           {/* Context Indicator */}
+           {session?.result && (
+               <div className="mt-4 px-4 py-2 bg-white/5 rounded-lg border border-white/10 text-[10px] text-gray-400 font-mono tracking-tight animate-fade-in">
+                   Connected to: {session.result.title}
+               </div>
+           )}
 
            <button onClick={onClose} aria-label="End Session" className="group relative px-8 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-full font-bold border border-red-500/50 transition-all overflow-hidden mt-8">
                <span className="relative z-10 group-hover:text-red-100 transition-colors">End Session</span>
@@ -903,7 +932,7 @@ export default function App() {
   if (showIntro) return <ConstellationVisualizer onSkip={() => setShowIntro(false)} />;
   if (showTrailer) return <TrailerOverlay onClose={() => setShowTrailer(false)} />;
   if (showThumbnail) return <ThumbnailView onClose={() => setShowThumbnail(false)} />;
-  if (isLiveMode) return <LiveTutorMode onClose={() => setIsLiveMode(false)} />;
+  if (isLiveMode) return <LiveTutorMode onClose={() => setIsLiveMode(false)} session={currentSession} />;
 
   return (
     <div className={`min-h-screen flex flex-col ${darkMode ? 'dark' : ''} ${accessibility.highContrast ? 'contrast-150' : ''} bg-gray-50 dark:bg-void-900 text-gray-900 dark:text-gray-100 h-[100dvh]`}>
@@ -985,7 +1014,7 @@ export default function App() {
                 <div className="max-w-7xl mx-auto w-full pb-20">
                     <GamificationBar profile={profile} />
                     {!hasResult && !isProcessing && (
-                        <div className="flex flex-col items-center justify-center min-h-[50vh] animate-float">
+                        <div className="flex flex-col items-center justify-center min-h-[50vh]">
                             <div className="w-full max-w-3xl glass-panel p-8 md:p-10 rounded-3xl space-y-8 shadow-2xl">
                                 <h2 className="text-3xl md:text-4xl font-black text-center text-gray-900 dark:text-white mb-4 tracking-tight">What have you observed?</h2>
                                 
